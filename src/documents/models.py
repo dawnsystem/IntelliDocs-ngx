@@ -1721,3 +1721,104 @@ class DeletionRequest(models.Model):
         self.save()
         
         return True
+
+
+class AISuggestionFeedback(models.Model):
+    """
+    Model to track feedback on AI suggestions for confidence calibration.
+    
+    This model records user acceptance/rejection of AI suggestions
+    to enable correlation analysis between confidence scores and actual
+    accuracy, allowing for dynamic threshold calibration.
+    """
+    
+    # Suggestion types
+    TYPE_TAG = 'tag'
+    TYPE_CORRESPONDENT = 'correspondent'
+    TYPE_DOCUMENT_TYPE = 'document_type'
+    TYPE_STORAGE_PATH = 'storage_path'
+    TYPE_CUSTOM_FIELD = 'custom_field'
+    TYPE_WORKFLOW = 'workflow'
+    TYPE_TITLE = 'title'
+    
+    SUGGESTION_TYPE_CHOICES = [
+        (TYPE_TAG, _('Tag')),
+        (TYPE_CORRESPONDENT, _('Correspondent')),
+        (TYPE_DOCUMENT_TYPE, _('Document Type')),
+        (TYPE_STORAGE_PATH, _('Storage Path')),
+        (TYPE_CUSTOM_FIELD, _('Custom Field')),
+        (TYPE_WORKFLOW, _('Workflow')),
+        (TYPE_TITLE, _('Title')),
+    ]
+    
+    # Core fields
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name='ai_suggestion_feedback',
+        help_text=_("Document the suggestion was made for"),
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='ai_feedback_given',
+        help_text=_("User who accepted/rejected the suggestion"),
+    )
+    
+    # Suggestion details
+    suggestion_type = models.CharField(
+        max_length=20,
+        choices=SUGGESTION_TYPE_CHOICES,
+        db_index=True,
+        help_text=_("Type of suggestion made by AI"),
+    )
+    suggested_value = models.CharField(
+        max_length=255,
+        help_text=_("The value suggested by AI (e.g., tag name, correspondent name)"),
+    )
+    suggested_id = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_("ID of the suggested object if applicable"),
+    )
+    confidence_score = models.FloatField(
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        help_text=_("AI confidence score when suggestion was made (0.0 to 1.0)"),
+        db_index=True,
+    )
+    
+    # Feedback
+    was_accepted = models.BooleanField(
+        help_text=_("Whether user accepted (True) or rejected (False) the suggestion"),
+    )
+    was_auto_applied = models.BooleanField(
+        default=False,
+        help_text=_("Whether the suggestion was auto-applied (True) or required user review (False)"),
+    )
+    
+    # Context for better analysis
+    document_text_length = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text=_("Length of document text (for correlation analysis)"),
+    )
+    other_suggestions_count = models.IntegerField(
+        default=0,
+        help_text=_("Number of other suggestions made at the same time"),
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _("AI suggestion feedback")
+        verbose_name_plural = _("AI suggestion feedbacks")
+        indexes = [
+            models.Index(fields=['suggestion_type', 'confidence_score']),
+            models.Index(fields=['user', 'suggestion_type']),
+            models.Index(fields=['was_accepted', 'confidence_score']),
+            models.Index(fields=['created_at', 'suggestion_type']),
+        ]
+    
+    def __str__(self):
+        action = "accepted" if self.was_accepted else "rejected"
+        return f"{self.user.username} {action} {self.suggestion_type}: {self.suggested_value} (conf: {self.confidence_score:.2f})"
