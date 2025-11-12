@@ -1195,6 +1195,38 @@ PAPERLESS_ML_MODEL_CACHE: Final[Path | None] = __get_optional_path(
     "PAPERLESS_ML_MODEL_CACHE",
 )
 
+# Rate Limiting for AI Operations
+# These settings prevent abuse and ensure fair resource usage
+# Rate limit for AI scans per user per hour
+PAPERLESS_AI_SCAN_RATE_LIMIT_PER_USER: Final[int] = __get_int(
+    "PAPERLESS_AI_SCAN_RATE_LIMIT_PER_USER",
+    100,  # 100 scans per hour per user
+)
+
+# Global rate limit for AI scans per minute
+PAPERLESS_AI_SCAN_RATE_LIMIT_GLOBAL: Final[int] = __get_int(
+    "PAPERLESS_AI_SCAN_RATE_LIMIT_GLOBAL",
+    50,  # 50 scans per minute globally
+)
+
+# Rate limit for AI deletion requests per user per day
+PAPERLESS_AI_DELETION_RATE_LIMIT: Final[int] = __get_int(
+    "PAPERLESS_AI_DELETION_RATE_LIMIT",
+    10,  # 10 deletion requests per day per user
+)
+
+# Allow superusers to bypass rate limits
+PAPERLESS_RATE_LIMIT_BYPASS_SUPERUSER: Final[bool] = __get_boolean(
+    "PAPERLESS_RATE_LIMIT_BYPASS_SUPERUSER",
+    "true",  # Superusers bypass rate limits by default
+)
+
+# Allow staff users to bypass rate limits
+PAPERLESS_RATE_LIMIT_BYPASS_STAFF: Final[bool] = __get_boolean(
+    "PAPERLESS_RATE_LIMIT_BYPASS_STAFF",
+    "false",  # Staff users don't bypass by default
+)
+
 OCR_COLOR_CONVERSION_STRATEGY = os.getenv(
     "PAPERLESS_OCR_COLOR_CONVERSION_STRATEGY",
     "RGB",
