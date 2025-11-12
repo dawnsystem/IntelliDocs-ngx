@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Any
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 if TYPE_CHECKING:
     from documents.models import Document, DeletionRequest
@@ -72,8 +73,11 @@ class AIDeletionManager:
         request.documents.set(documents)
         
         logger.info(
-            f"Created deletion request {request.id} for {len(documents)} documents "
-            f"requiring approval from user {user.username}"
+            _("Created deletion request %(request_id)s for %(count)d documents requiring approval from user %(user)s") % {
+                'request_id': request.id,
+                'count': len(documents),
+                'user': user.username
+            }
         )
         
         # TODO: Send notification to user about pending deletion request
@@ -183,45 +187,70 @@ class AIDeletionManager:
         """
         impact = request.impact_summary
         
+        separator = "==========================================="
+        
+        header = _("AI DELETION REQUEST #%(id)s") % {'id': request.id}
+        
+        reason_section = _("REASON:\n%(reason)s") % {'reason': request.ai_reason}
+        
+        impact_summary = _("IMPACT SUMMARY:\n- Number of documents: %(count)d\n- Affected tags: %(tags)s\n- Affected correspondents: %(correspondents)s\n- Affected document types: %(types)s") % {
+            'count': impact.get('document_count', 0),
+            'tags': ', '.join(impact.get('affected_tags', [])) or str(_('None')),
+            'correspondents': ', '.join(impact.get('affected_correspondents', [])) or str(_('None')),
+            'types': ', '.join(impact.get('affected_types', [])) or str(_('None'))
+        }
+        
+        date_range = _("DATE RANGE:\n- Earliest: %(earliest)s\n- Latest: %(latest)s") % {
+            'earliest': impact.get('date_range', {}).get('earliest', str(_('Unknown'))),
+            'latest': impact.get('date_range', {}).get('latest', str(_('Unknown')))
+        }
+        
+        docs_header = _("DOCUMENTS TO BE DELETED:")
+        
         message = f"""
-===========================================
-AI DELETION REQUEST #{request.id}
-===========================================
+{separator}
+{header}
+{separator}
 
-REASON:
-{request.ai_reason}
+{reason_section}
 
-IMPACT SUMMARY:
-- Number of documents: {impact.get('document_count', 0)}
-- Affected tags: {', '.join(impact.get('affected_tags', [])) or 'None'}
-- Affected correspondents: {', '.join(impact.get('affected_correspondents', [])) or 'None'}
-- Affected document types: {', '.join(impact.get('affected_types', [])) or 'None'}
+{impact_summary}
 
-DATE RANGE:
-- Earliest: {impact.get('date_range', {}).get('earliest', 'Unknown')}
-- Latest: {impact.get('date_range', {}).get('latest', 'Unknown')}
+{date_range}
 
-DOCUMENTS TO BE DELETED:
+{docs_header}
 """
         
         for i, doc in enumerate(impact.get('documents', []), 1):
-            message += f"""
-{i}. ID: {doc['id']} - {doc['title']}
-   Created: {doc['created']}
-   Correspondent: {doc['correspondent'] or 'None'}
-   Type: {doc['document_type'] or 'None'}
-   Tags: {', '.join(doc['tags']) or 'None'}
-"""
+            doc_info = _(
+                "%(num)d. ID: %(id)s - %(title)s\n"
+                "   Created: %(created)s\n"
+                "   Correspondent: %(correspondent)s\n"
+                "   Type: %(type)s\n"
+                "   Tags: %(tags)s"
+            ) % {
+                'num': i,
+                'id': doc['id'],
+                'title': doc['title'],
+                'created': doc['created'],
+                'correspondent': doc['correspondent'] or str(_('None')),
+                'type': doc['document_type'] or str(_('None')),
+                'tags': ', '.join(doc['tags']) or str(_('None'))
+            }
+            message += f"\n{doc_info}\n"
         
-        message += """
-===========================================
+        required_action = _(
+            "REQUIRED ACTION:\n"
+            "This deletion request requires your explicit approval.\n"
+            "No files will be deleted until you confirm this action.\n\n"
+            "Please review the above information carefully before\n"
+            "approving or rejecting this request."
+        )
+        
+        message += f"""
+{separator}
 
-REQUIRED ACTION:
-This deletion request requires your explicit approval.
-No files will be deleted until you confirm this action.
-
-Please review the above information carefully before
-approving or rejecting this request.
+{required_action}
 """
         
         return message

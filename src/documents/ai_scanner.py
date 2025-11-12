@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Any, Tuple
 
 from django.conf import settings
 from django.db import transaction
+from django.utils.translation import gettext_lazy as _
 
 if TYPE_CHECKING:
     from documents.models import (
@@ -128,8 +129,10 @@ class AIDocumentScanner:
         self._table_extractor = None
         
         logger.info(
-            f"AIDocumentScanner initialized - ML: {self.ml_enabled}, "
-            f"Advanced OCR: {self.advanced_ocr_enabled}"
+            _("AIDocumentScanner initialized - ML: %(ml)s, Advanced OCR: %(ocr)s") % {
+                'ml': self.ml_enabled,
+                'ocr': self.advanced_ocr_enabled
+            }
         )
 
     def _get_classifier(self):
@@ -138,9 +141,9 @@ class AIDocumentScanner:
             try:
                 from documents.ml.classifier import TransformerDocumentClassifier
                 self._classifier = TransformerDocumentClassifier()
-                logger.info("ML classifier loaded successfully")
+                logger.info(_("ML classifier loaded successfully"))
             except Exception as e:
-                logger.warning(f"Failed to load ML classifier: {e}")
+                logger.warning(_("Failed to load ML classifier: %(error)s") % {'error': e})
                 self.ml_enabled = False
         return self._classifier
 
@@ -150,9 +153,9 @@ class AIDocumentScanner:
             try:
                 from documents.ml.ner import DocumentNER
                 self._ner_extractor = DocumentNER()
-                logger.info("NER extractor loaded successfully")
+                logger.info(_("NER extractor loaded successfully"))
             except Exception as e:
-                logger.warning(f"Failed to load NER extractor: {e}")
+                logger.warning(_("Failed to load NER extractor: %(error)s") % {'error': e})
         return self._ner_extractor
 
     def _get_semantic_search(self):
@@ -161,9 +164,9 @@ class AIDocumentScanner:
             try:
                 from documents.ml.semantic_search import SemanticSearch
                 self._semantic_search = SemanticSearch()
-                logger.info("Semantic search loaded successfully")
+                logger.info(_("Semantic search loaded successfully"))
             except Exception as e:
-                logger.warning(f"Failed to load semantic search: {e}")
+                logger.warning(_("Failed to load semantic search: %(error)s") % {'error': e})
         return self._semantic_search
 
     def _get_table_extractor(self):
@@ -172,9 +175,9 @@ class AIDocumentScanner:
             try:
                 from documents.ocr.table_extractor import TableExtractor
                 self._table_extractor = TableExtractor()
-                logger.info("Table extractor loaded successfully")
+                logger.info(_("Table extractor loaded successfully"))
             except Exception as e:
-                logger.warning(f"Failed to load table extractor: {e}")
+                logger.warning(_("Failed to load table extractor: %(error)s") % {'error': e})
         return self._table_extractor
 
     def scan_document(
@@ -197,7 +200,7 @@ class AIDocumentScanner:
         Returns:
             AIScanResult containing all suggestions and extracted data
         """
-        logger.info(f"Starting AI scan for document: {document.title} (ID: {document.pk})")
+        logger.info(_("Starting AI scan for document: %(title)s (ID: %(id)s)") % {'title': document.title, 'id': document.pk})
         
         result = AIScanResult()
         
@@ -239,8 +242,8 @@ class AIDocumentScanner:
         if self.advanced_ocr_enabled and original_file_path:
             result.metadata["tables"] = self._extract_tables(original_file_path)
         
-        logger.info(f"AI scan completed for document {document.pk}")
-        logger.debug(f"Scan results: {result.to_dict()}")
+        logger.info(_("AI scan completed for document %(id)s") % {'id': document.pk})
+        logger.debug(_("Scan results: %(results)s") % {'results': result.to_dict()})
         
         return result
 
@@ -268,10 +271,10 @@ class AIDocumentScanner:
                 if key in entities and isinstance(entities[key], list):
                     entities[key] = [{"text": e} if isinstance(e, str) else e for e in entities[key]]
             
-            logger.debug(f"Extracted entities from NER")
+            logger.debug(_("Extracted entities from NER"))
             return entities
         except Exception as e:
-            logger.error(f"Entity extraction failed: {e}", exc_info=True)
+            logger.error(_("Entity extraction failed: %(error)s") % {'error': e}, exc_info=True)
             return {}
 
     def _suggest_tags(
@@ -329,10 +332,10 @@ class AIDocumentScanner:
             suggestions = [(tid, conf) for tid, conf in seen.items()]
             suggestions.sort(key=lambda x: x[1], reverse=True)
             
-            logger.debug(f"Suggested {len(suggestions)} tags")
+            logger.debug(_("Suggested %(count)d tags") % {'count': len(suggestions)})
             
         except Exception as e:
-            logger.error(f"Tag suggestion failed: {e}", exc_info=True)
+            logger.error(_("Tag suggestion failed: %(error)s") % {'error': e}, exc_info=True)
         
         return suggestions
 
@@ -364,8 +367,10 @@ class AIDocumentScanner:
                 correspondent = matched_correspondents[0]
                 confidence = 0.85
                 logger.debug(
-                    f"Detected correspondent: {correspondent.name} "
-                    f"(confidence: {confidence})"
+                    _("Detected correspondent: %(name)s (confidence: %(conf)s)") % {
+                        'name': correspondent.name,
+                        'conf': confidence
+                    }
                 )
                 return (correspondent.id, confidence)
             
@@ -380,13 +385,15 @@ class AIDocumentScanner:
                     correspondent = correspondents.first()
                     confidence = 0.70
                     logger.debug(
-                        f"Detected correspondent from NER: {correspondent.name} "
-                        f"(confidence: {confidence})"
+                        _("Detected correspondent from NER: %(name)s (confidence: %(conf)s)") % {
+                            'name': correspondent.name,
+                            'conf': confidence
+                        }
                     )
                     return (correspondent.id, confidence)
         
         except Exception as e:
-            logger.error(f"Correspondent detection failed: {e}", exc_info=True)
+            logger.error(_("Correspondent detection failed: %(error)s") % {'error': e}, exc_info=True)
         
         return None
 
@@ -413,8 +420,10 @@ class AIDocumentScanner:
                 doc_type = matched_types[0]
                 confidence = 0.85
                 logger.debug(
-                    f"Classified document type: {doc_type.name} "
-                    f"(confidence: {confidence})"
+                    _("Classified document type: %(name)s (confidence: %(conf)s)") % {
+                        'name': doc_type.name,
+                        'conf': confidence
+                    }
                 )
                 return (doc_type.id, confidence)
             
@@ -426,7 +435,7 @@ class AIDocumentScanner:
                 pass
         
         except Exception as e:
-            logger.error(f"Document type classification failed: {e}", exc_info=True)
+            logger.error(_("Document type classification failed: %(error)s") % {'error': e}, exc_info=True)
         
         return None
 
@@ -453,13 +462,15 @@ class AIDocumentScanner:
                 storage_path = matched_paths[0]
                 confidence = 0.80
                 logger.debug(
-                    f"Suggested storage path: {storage_path.name} "
-                    f"(confidence: {confidence})"
+                    _("Suggested storage path: %(name)s (confidence: %(conf)s)") % {
+                        'name': storage_path.name,
+                        'conf': confidence
+                    }
                 )
                 return (storage_path.id, confidence)
         
         except Exception as e:
-            logger.error(f"Storage path suggestion failed: {e}", exc_info=True)
+            logger.error(_("Storage path suggestion failed: %(error)s") % {'error': e}, exc_info=True)
         
         return None
 
@@ -491,12 +502,15 @@ class AIDocumentScanner:
                 if value is not None and confidence >= self.suggest_threshold:
                     extracted_fields[field.id] = (value, confidence)
                     logger.debug(
-                        f"Extracted custom field '{field.name}': {value} "
-                        f"(confidence: {confidence})"
+                        _("Extracted custom field '%(field)s': %(value)s (confidence: %(conf)s)") % {
+                            'field': field.name,
+                            'value': value,
+                            'conf': confidence
+                        }
                     )
         
         except Exception as e:
-            logger.error(f"Custom field extraction failed: {e}", exc_info=True)
+            logger.error(_("Custom field extraction failed: %(error)s") % {'error': e}, exc_info=True)
         
         return extracted_fields
 
@@ -590,12 +604,14 @@ class AIDocumentScanner:
                 if confidence >= self.suggest_threshold:
                     suggestions.append((workflow.id, confidence))
                     logger.debug(
-                        f"Suggested workflow: {workflow.name} "
-                        f"(confidence: {confidence})"
+                        _("Suggested workflow: %(name)s (confidence: %(conf)s)") % {
+                            'name': workflow.name,
+                            'conf': confidence
+                        }
                     )
         
         except Exception as e:
-            logger.error(f"Workflow suggestion failed: {e}", exc_info=True)
+            logger.error(_("Workflow suggestion failed: %(error)s") % {'error': e}, exc_info=True)
         
         return suggestions
 
@@ -662,11 +678,11 @@ class AIDocumentScanner:
             
             if title_parts:
                 suggested_title = " - ".join(title_parts)
-                logger.debug(f"Generated title suggestion: {suggested_title}")
+                logger.debug(_("Generated title suggestion: %(title)s") % {'title': suggested_title})
                 return suggested_title[:127]  # Respect title length limit
         
         except Exception as e:
-            logger.error(f"Title suggestion failed: {e}", exc_info=True)
+            logger.error(_("Title suggestion failed: %(error)s") % {'error': e}, exc_info=True)
         
         return None
 
@@ -683,10 +699,10 @@ class AIDocumentScanner:
         
         try:
             tables = extractor.extract_tables_from_image(file_path)
-            logger.debug(f"Extracted {len(tables)} tables from document")
+            logger.debug(_("Extracted %(count)d tables from document") % {'count': len(tables)})
             return tables
         except Exception as e:
-            logger.error(f"Table extraction failed: {e}", exc_info=True)
+            logger.error(_("Table extraction failed: %(error)s") % {'error': e}, exc_info=True)
             return []
 
     def apply_scan_results(
@@ -734,7 +750,7 @@ class AIDocumentScanner:
                         tag = Tag.objects.get(pk=tag_id)
                         document.add_nested_tags([tag])
                         applied["tags"].append({"id": tag_id, "name": tag.name})
-                        logger.info(f"Auto-applied tag: {tag.name}")
+                        logger.info(_("Auto-applied tag: %(name)s") % {'name': tag.name})
                     elif confidence >= self.suggest_threshold:
                         tag = Tag.objects.get(pk=tag_id)
                         suggestions["tags"].append({
@@ -753,7 +769,7 @@ class AIDocumentScanner:
                             "id": corr_id,
                             "name": correspondent.name,
                         }
-                        logger.info(f"Auto-applied correspondent: {correspondent.name}")
+                        logger.info(_("Auto-applied correspondent: %(name)s") % {'name': correspondent.name})
                     elif confidence >= self.suggest_threshold:
                         correspondent = Correspondent.objects.get(pk=corr_id)
                         suggestions["correspondent"] = {
@@ -772,7 +788,7 @@ class AIDocumentScanner:
                             "id": type_id,
                             "name": doc_type.name,
                         }
-                        logger.info(f"Auto-applied document type: {doc_type.name}")
+                        logger.info(_("Auto-applied document type: %(name)s") % {'name': doc_type.name})
                     elif confidence >= self.suggest_threshold:
                         doc_type = DocumentType.objects.get(pk=type_id)
                         suggestions["document_type"] = {
@@ -791,7 +807,7 @@ class AIDocumentScanner:
                             "id": path_id,
                             "name": storage_path.name,
                         }
-                        logger.info(f"Auto-applied storage path: {storage_path.name}")
+                        logger.info(_("Auto-applied storage path: %(name)s") % {'name': storage_path.name})
                     elif confidence >= self.suggest_threshold:
                         storage_path = StoragePath.objects.get(pk=path_id)
                         suggestions["storage_path"] = {
@@ -804,7 +820,7 @@ class AIDocumentScanner:
                 document.save()
         
         except Exception as e:
-            logger.error(f"Failed to apply scan results: {e}", exc_info=True)
+            logger.error(_("Failed to apply scan results: %(error)s") % {'error': e}, exc_info=True)
         
         return {
             "applied": applied,
