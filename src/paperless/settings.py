@@ -1195,6 +1195,20 @@ PAPERLESS_ML_MODEL_CACHE: Final[Path | None] = __get_optional_path(
     "PAPERLESS_ML_MODEL_CACHE",
 )
 
+# NER Multi-language Support
+# Enable automatic language detection for NER
+PAPERLESS_NER_AUTO_DETECT_LANGUAGE: Final[bool] = __get_boolean(
+    "PAPERLESS_NER_AUTO_DETECT_LANGUAGE",
+    "true",  # Enabled by default for IntelliDocs
+)
+
+# Supported languages for NER (comma-separated list)
+# Supported: en (English), es (Spanish), fr (French), de (German)
+PAPERLESS_NER_SUPPORTED_LANGUAGES: Final[list[str]] = __get_list(
+    "PAPERLESS_NER_SUPPORTED_LANGUAGES",
+    ["en", "es", "fr", "de"],
+)
+
 OCR_COLOR_CONVERSION_STRATEGY = os.getenv(
     "PAPERLESS_OCR_COLOR_CONVERSION_STRATEGY",
     "RGB",

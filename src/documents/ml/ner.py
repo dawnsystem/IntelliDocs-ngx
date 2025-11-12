@@ -8,6 +8,11 @@ Extracts structured information from documents:
 - And more...
 
 This enables automatic metadata extraction and better document understanding.
+
+Multi-language support:
+- Automatic language detection
+- Multilingual NER models for Spanish, English, French, German
+- Fallback to English for unsupported languages
 """
 
 from __future__ import annotations
@@ -16,12 +21,23 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from langdetect import detect, LangDetectException
 from transformers import pipeline
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger("paperless.ml.ner")
+
+# Supported languages and their corresponding NER models
+SUPPORTED_LANGUAGES = {
+    "en": "dslim/bert-base-NER",  # English (default)
+    "es": "mrm8488/bert-spanish-cased-finetuned-ner",  # Spanish
+    "fr": "Jean-Baptiste/camembert-ner",  # French
+    "de": "dbmdz/bert-large-cased-finetuned-conll03-english",  # German (uses multilingual)
+    # Multilingual model as fallback
+    "multi": "Davlan/bert-base-multilingual-cased-ner-hrl",  # Multilingual
+}
 
 
 class DocumentNER:
@@ -40,56 +56,184 @@ class DocumentNER:
     - Invoice numbers
     - Email addresses
     - Phone numbers
+    
+    Multi-language support:
+    - Automatic language detection using langdetect
+    - Language-specific models for better accuracy
+    - Fallback to English/multilingual models for unsupported languages
     """
 
-    def __init__(self, model_name: str = "dslim/bert-base-NER"):
+    def __init__(
+        self,
+        model_name: str = "dslim/bert-base-NER",
+        auto_detect_language: bool = True,
+        supported_languages: list[str] | None = None,
+    ):
         """
         Initialize NER extractor.
         
         Args:
-            model_name: HuggingFace NER model
-                       Default: dslim/bert-base-NER (good general purpose)
-                       Alternatives:
-                       - dslim/bert-base-NER-uncased
-                       - dbmdz/bert-large-cased-finetuned-conll03-english
+            model_name: HuggingFace NER model (used if auto_detect_language=False)
+                       Default: dslim/bert-base-NER (good general purpose English)
+            auto_detect_language: Enable automatic language detection
+                                 Default: True
+            supported_languages: List of language codes to support
+                                Default: ["en", "es", "fr", "de"]
         """
-        logger.info(f"Initializing NER with model: {model_name}")
-
-        self.ner_pipeline = pipeline(
-            "ner",
-            model=model_name,
-            aggregation_strategy="simple",
-        )
-
+        self.auto_detect_language = auto_detect_language
+        self.supported_languages = supported_languages or ["en", "es", "fr", "de"]
+        self.default_model = model_name
+        
+        # Cache for language-specific pipelines
+        self._pipelines: dict[str, any] = {}
+        
+        # Initialize default pipeline
+        if not auto_detect_language:
+            logger.info(f"Initializing NER with model: {model_name}")
+            self.ner_pipeline = pipeline(
+                "ner",
+                model=model_name,
+                aggregation_strategy="simple",
+            )
+        else:
+            logger.info(f"Initializing NER with multi-language support: {self.supported_languages}")
+            self.ner_pipeline = None
+        
         # Compile regex patterns for efficiency
         self._compile_patterns()
 
         logger.info("DocumentNER initialized successfully")
 
+    def _detect_language(self, text: str) -> str:
+        """
+        Detect the language of the text.
+        
+        Args:
+            text: Text to detect language from
+            
+        Returns:
+            str: Language code (e.g., 'en', 'es', 'fr', 'de')
+                 Returns 'en' if detection fails
+        """
+        try:
+            # Use first 1000 characters for faster detection
+            sample_text = text[:1000]
+            detected_lang = detect(sample_text)
+            
+            logger.info(f"Detected language: {detected_lang}")
+            
+            # Return detected language if supported, otherwise 'en'
+            if detected_lang in self.supported_languages:
+                return detected_lang
+            else:
+                logger.warning(
+                    f"Detected language '{detected_lang}' not in supported languages. "
+                    f"Falling back to English."
+                )
+                return "en"
+        except LangDetectException as e:
+            logger.warning(f"Language detection failed: {e}. Falling back to English.")
+            return "en"
+        except Exception as e:
+            logger.error(f"Unexpected error in language detection: {e}. Falling back to English.")
+            return "en"
+    
+    def _get_pipeline_for_language(self, language: str):
+        """
+        Get or create NER pipeline for the specified language.
+        
+        Args:
+            language: Language code (e.g., 'en', 'es', 'fr', 'de')
+            
+        Returns:
+            NER pipeline for the language
+        """
+        # Return cached pipeline if available
+        if language in self._pipelines:
+            return self._pipelines[language]
+        
+        # Get model for language
+        model_name = SUPPORTED_LANGUAGES.get(language, SUPPORTED_LANGUAGES["en"])
+        
+        try:
+            logger.info(f"Loading NER model for {language}: {model_name}")
+            pipeline_obj = pipeline(
+                "ner",
+                model=model_name,
+                aggregation_strategy="simple",
+            )
+            
+            # Cache the pipeline
+            self._pipelines[language] = pipeline_obj
+            logger.info(f"Successfully loaded NER model for {language}")
+            
+            return pipeline_obj
+        except Exception as e:
+            logger.error(f"Failed to load model for {language}: {e}. Using fallback.")
+            
+            # Try multilingual model as fallback
+            if language != "multi" and "multi" not in self._pipelines:
+                try:
+                    logger.info("Loading multilingual fallback model")
+                    fallback_pipeline = pipeline(
+                        "ner",
+                        model=SUPPORTED_LANGUAGES["multi"],
+                        aggregation_strategy="simple",
+                    )
+                    self._pipelines["multi"] = fallback_pipeline
+                    return fallback_pipeline
+                except Exception as fallback_error:
+                    logger.error(f"Fallback model also failed: {fallback_error}")
+            
+            # Last resort: return existing pipeline if any, or None
+            if self._pipelines:
+                return next(iter(self._pipelines.values()))
+            return None
+
     def _compile_patterns(self) -> None:
         """Compile regex patterns for common entities."""
-        # Date patterns
+        # Date patterns (supports multiple formats including European)
         self.date_patterns = [
             re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"),  # MM/DD/YYYY, DD-MM-YYYY
             re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}"),  # YYYY-MM-DD
             re.compile(
                 r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}",
                 re.IGNORECASE,
-            ),  # Month DD, YYYY
+            ),  # Month DD, YYYY (English)
+            # Spanish months
+            re.compile(
+                r"(?:Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre) \d{1,2},? \d{4}",
+                re.IGNORECASE,
+            ),
+            # French months
+            re.compile(
+                r"(?:Janvier|Février|Mars|Avril|Mai|Juin|Juillet|Août|Septembre|Octobre|Novembre|Décembre) \d{1,2},? \d{4}",
+                re.IGNORECASE,
+            ),
+            # German months
+            re.compile(
+                r"(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember) \d{1,2},? \d{4}",
+                re.IGNORECASE,
+            ),
         ]
 
-        # Amount patterns
+        # Amount patterns (supports multiple currencies)
         self.amount_patterns = [
             re.compile(r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # $1,234.56
             re.compile(r"\d{1,3}(?:,\d{3})*(?:\.\d{2})?\s?USD"),  # 1,234.56 USD
-            re.compile(r"€\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # €1,234.56
+            re.compile(r"€\s?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?"),  # €1.234,56 or €1,234.56
+            re.compile(r"\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?\s?EUR"),  # 1.234,56 EUR
             re.compile(r"£\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # £1,234.56
+            re.compile(r"\d{1,3}(?:,\d{3})*(?:\.\d{2})?\s?GBP"),  # 1,234.56 GBP
         ]
 
-        # Invoice number patterns
+        # Invoice number patterns (multilingual)
         self.invoice_patterns = [
-            re.compile(r"(?:Invoice|Inv\.?)\s*#?\s*(\w+)", re.IGNORECASE),
-            re.compile(r"(?:Invoice|Inv\.?)\s*(?:Number|No\.?)\s*:?\s*(\w+)", re.IGNORECASE),
+            re.compile(r"(?:Invoice|Inv\.?)\s*#?\s*(\w+)", re.IGNORECASE),  # English
+            re.compile(r"(?:Invoice|Inv\.?)\s*(?:Number|No\.?)\s*:?\s*(\w+)", re.IGNORECASE),  # English
+            re.compile(r"(?:Factura|Fact\.?)\s*#?\s*(\w+)", re.IGNORECASE),  # Spanish
+            re.compile(r"(?:Facture|Fac\.?)\s*#?\s*(\w+)", re.IGNORECASE),  # French
+            re.compile(r"(?:Rechnung|Rech\.?)\s*#?\s*(\w+)", re.IGNORECASE),  # German
         ]
 
         # Email pattern
@@ -97,17 +241,19 @@ class DocumentNER:
             r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
         )
 
-        # Phone pattern (US/International)
+        # Phone pattern (US/International/European)
         self.phone_pattern = re.compile(
-            r"(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}",
+            r"(?:\+\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}",
         )
 
-    def extract_entities(self, text: str) -> dict[str, list[str]]:
+    def extract_entities(self, text: str, language: str | None = None) -> dict[str, list[str]]:
         """
         Extract named entities from text.
         
         Args:
             text: Document text
+            language: Optional language code override (e.g., 'en', 'es', 'fr', 'de')
+                     If None and auto_detect_language is True, language will be detected
             
         Returns:
             dict: Dictionary of entity types and their values
@@ -116,10 +262,29 @@ class DocumentNER:
                       'organizations': ['Acme Corp', ...],
                       'locations': ['New York', ...],
                       'misc': [...],
+                      'language': 'en',  # Detected/used language
                   }
         """
-        # Run NER model
-        entities = self.ner_pipeline(text[:5000])  # Limit to first 5000 chars
+        # Determine language
+        if self.auto_detect_language:
+            detected_lang = language or self._detect_language(text)
+            ner_pipeline = self._get_pipeline_for_language(detected_lang)
+        else:
+            detected_lang = "en"
+            ner_pipeline = self.ner_pipeline
+        
+        if ner_pipeline is None:
+            logger.error("No NER pipeline available")
+            return {
+                "persons": [],
+                "organizations": [],
+                "locations": [],
+                "misc": [],
+                "language": detected_lang,
+            }
+        
+        # Run NER model (limit to first 5000 chars for performance)
+        entities = ner_pipeline(text[:5000])
 
         # Organize by type
         organized = {
@@ -127,29 +292,33 @@ class DocumentNER:
             "organizations": [],
             "locations": [],
             "misc": [],
+            "language": detected_lang,
         }
 
         for entity in entities:
             entity_type = entity["entity_group"]
             entity_text = entity["word"].strip()
 
-            if entity_type == "PER":
+            # Map entity types (some models use different labels)
+            if entity_type in ("PER", "PERS", "PERSON"):
                 organized["persons"].append(entity_text)
-            elif entity_type == "ORG":
+            elif entity_type in ("ORG", "ORGANIZATION"):
                 organized["organizations"].append(entity_text)
-            elif entity_type == "LOC":
+            elif entity_type in ("LOC", "LOCATION", "GPE"):
                 organized["locations"].append(entity_text)
             else:
                 organized["misc"].append(entity_text)
 
         # Remove duplicates while preserving order
         for key in organized:
-            seen = set()
-            organized[key] = [
-                x for x in organized[key] if not (x in seen or seen.add(x))
-            ]
+            if key != "language":
+                seen = set()
+                organized[key] = [
+                    x for x in organized[key] if not (x in seen or seen.add(x))
+                ]
 
-        logger.debug(f"Extracted entities: {organized}")
+        logger.info(f"Extracted entities in {detected_lang}: {sum(len(v) for k, v in organized.items() if k != 'language')} entities")
+        logger.debug(f"Extracted entities detail: {organized}")
         return organized
 
     def extract_dates(self, text: str) -> list[str]:
@@ -238,7 +407,7 @@ class DocumentNER:
         seen = set()
         return [x for x in phones if not (x in seen or seen.add(x))]
 
-    def extract_all(self, text: str) -> dict[str, list[str]]:
+    def extract_all(self, text: str, language: str | None = None) -> dict[str, list[str]]:
         """
         Extract all types of entities from text.
         
@@ -246,6 +415,8 @@ class DocumentNER:
         
         Args:
             text: Document text
+            language: Optional language code override (e.g., 'en', 'es', 'fr', 'de')
+                     If None and auto_detect_language is True, language will be detected
             
         Returns:
             dict: Complete extraction results
@@ -259,12 +430,15 @@ class DocumentNER:
                       'invoice_numbers': [...],
                       'emails': [...],
                       'phones': [...],
+                      'language': 'en',  # Detected/used language
                   }
         """
         logger.info("Extracting all entities from document")
 
-        # Get NER entities
-        result = self.extract_entities(text)
+        # Get NER entities (includes language detection)
+        result = self.extract_entities(text, language)
+        
+        detected_lang = result.get("language", "en")
 
         # Add regex-based extractions
         result["dates"] = self.extract_dates(text)
@@ -273,8 +447,9 @@ class DocumentNER:
         result["emails"] = self.extract_emails(text)
         result["phones"] = self.extract_phones(text)
 
+        total_entities = sum(len(v) for k, v in result.items() if k != "language")
         logger.info(
-            f"Extracted: {sum(len(v) for v in result.values())} total entities",
+            f"Extracted {total_entities} total entities from {detected_lang} document",
         )
 
         return result

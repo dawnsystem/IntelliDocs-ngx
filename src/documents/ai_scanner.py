@@ -145,12 +145,31 @@ class AIDocumentScanner:
         return self._classifier
 
     def _get_ner_extractor(self):
-        """Lazy load the NER extractor."""
+        """Lazy load the NER extractor with multi-language support."""
         if self._ner_extractor is None and self.ml_enabled:
             try:
+                from django.conf import settings
                 from documents.ml.ner import DocumentNER
-                self._ner_extractor = DocumentNER()
-                logger.info("NER extractor loaded successfully")
+                
+                # Get settings for NER multi-language support
+                auto_detect = getattr(
+                    settings, 
+                    "PAPERLESS_NER_AUTO_DETECT_LANGUAGE", 
+                    True
+                )
+                supported_langs = getattr(
+                    settings, 
+                    "PAPERLESS_NER_SUPPORTED_LANGUAGES", 
+                    ["en", "es", "fr", "de"]
+                )
+                
+                self._ner_extractor = DocumentNER(
+                    auto_detect_language=auto_detect,
+                    supported_languages=supported_langs,
+                )
+                logger.info(
+                    f"NER extractor loaded successfully with multi-language support: {supported_langs}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to load NER extractor: {e}")
         return self._ner_extractor
