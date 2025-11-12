@@ -19,11 +19,21 @@ According to agents.md requirements:
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from typing import TYPE_CHECKING, Dict, List, Optional, Any, Tuple
 
 from django.conf import settings
 from django.db import transaction
+
+# Import metrics module for observability
+try:
+    from documents import metrics
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+    metrics = None
 
 if TYPE_CHECKING:
     from documents.models import (
@@ -37,6 +47,25 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger("paperless.ai_scanner")
+
+
+def log_structured(level: str, message: str, **context):
+    """
+    Log structured JSON message with context.
+    
+    Args:
+        level: Log level (info, warning, error, debug)
+        message: Log message
+        **context: Additional context fields
+    """
+    log_data = {
+        "message": message,
+        "timestamp": time.time(),
+        **context
+    }
+    
+    log_func = getattr(logger, level, logger.info)
+    log_func(json.dumps(log_data))
 
 
 class AIScanResult:
@@ -127,10 +156,23 @@ class AIDocumentScanner:
         self._semantic_search = None
         self._table_extractor = None
         
-        logger.info(
-            f"AIDocumentScanner initialized - ML: {self.ml_enabled}, "
-            f"Advanced OCR: {self.advanced_ocr_enabled}"
+        log_structured(
+            "info",
+            "AIDocumentScanner initialized",
+            ml_enabled=self.ml_enabled,
+            advanced_ocr_enabled=self.advanced_ocr_enabled,
+            auto_apply_threshold=self.auto_apply_threshold,
+            suggest_threshold=self.suggest_threshold,
         )
+        
+        # Record scanner configuration in metrics
+        if METRICS_AVAILABLE:
+            metrics.set_scanner_info(
+                ml_enabled=self.ml_enabled,
+                advanced_ocr_enabled=self.advanced_ocr_enabled,
+                auto_apply_threshold=self.auto_apply_threshold,
+                suggest_threshold=self.suggest_threshold,
+            )
 
     def _get_classifier(self):
         """Lazy load the ML classifier."""
@@ -138,9 +180,16 @@ class AIDocumentScanner:
             try:
                 from documents.ml.classifier import TransformerDocumentClassifier
                 self._classifier = TransformerDocumentClassifier()
-                logger.info("ML classifier loaded successfully")
+                log_structured("info", "ML classifier loaded successfully")
             except Exception as e:
-                logger.warning(f"Failed to load ML classifier: {e}")
+                log_structured(
+                    "warning",
+                    "Failed to load ML classifier",
+                    error=str(e),
+                    error_type="ml_load_failure"
+                )
+                if METRICS_AVAILABLE:
+                    metrics.record_error("ml_load_failure")
                 self.ml_enabled = False
         return self._classifier
 
@@ -150,9 +199,16 @@ class AIDocumentScanner:
             try:
                 from documents.ml.ner import DocumentNER
                 self._ner_extractor = DocumentNER()
-                logger.info("NER extractor loaded successfully")
+                log_structured("info", "NER extractor loaded successfully")
             except Exception as e:
-                logger.warning(f"Failed to load NER extractor: {e}")
+                log_structured(
+                    "warning",
+                    "Failed to load NER extractor",
+                    error=str(e),
+                    error_type="ner_load_failure"
+                )
+                if METRICS_AVAILABLE:
+                    metrics.record_error("ner_load_failure")
         return self._ner_extractor
 
     def _get_semantic_search(self):
@@ -161,9 +217,16 @@ class AIDocumentScanner:
             try:
                 from documents.ml.semantic_search import SemanticSearch
                 self._semantic_search = SemanticSearch()
-                logger.info("Semantic search loaded successfully")
+                log_structured("info", "Semantic search loaded successfully")
             except Exception as e:
-                logger.warning(f"Failed to load semantic search: {e}")
+                log_structured(
+                    "warning",
+                    "Failed to load semantic search",
+                    error=str(e),
+                    error_type="semantic_search_load_failure"
+                )
+                if METRICS_AVAILABLE:
+                    metrics.record_error("semantic_search_load_failure")
         return self._semantic_search
 
     def _get_table_extractor(self):
@@ -172,9 +235,16 @@ class AIDocumentScanner:
             try:
                 from documents.ocr.table_extractor import TableExtractor
                 self._table_extractor = TableExtractor()
-                logger.info("Table extractor loaded successfully")
+                log_structured("info", "Table extractor loaded successfully")
             except Exception as e:
-                logger.warning(f"Failed to load table extractor: {e}")
+                log_structured(
+                    "warning",
+                    "Failed to load table extractor",
+                    error=str(e),
+                    error_type="table_extractor_load_failure"
+                )
+                if METRICS_AVAILABLE:
+                    metrics.record_error("table_extractor_load_failure")
         return self._table_extractor
 
     def scan_document(
@@ -197,52 +267,107 @@ class AIDocumentScanner:
         Returns:
             AIScanResult containing all suggestions and extracted data
         """
-        logger.info(f"Starting AI scan for document: {document.title} (ID: {document.pk})")
+        start_time = time.time()
+        
+        log_structured(
+            "info",
+            "Starting AI scan",
+            document_id=document.pk,
+            document_title=document.title,
+            has_original_file=bool(original_file_path)
+        )
         
         result = AIScanResult()
         
-        # Extract entities using NER
-        result.extracted_entities = self._extract_entities(document_text)
-        
-        # Analyze and suggest tags
-        result.tags = self._suggest_tags(document, document_text, result.extracted_entities)
-        
-        # Detect correspondent
-        result.correspondent = self._detect_correspondent(
-            document, document_text, result.extracted_entities
-        )
-        
-        # Classify document type
-        result.document_type = self._classify_document_type(
-            document, document_text, result.extracted_entities
-        )
-        
-        # Suggest storage path
-        result.storage_path = self._suggest_storage_path(
-            document, document_text, result
-        )
-        
-        # Extract custom fields
-        result.custom_fields = self._extract_custom_fields(
-            document, document_text, result.extracted_entities
-        )
-        
-        # Suggest workflows
-        result.workflows = self._suggest_workflows(document, document_text, result)
-        
-        # Generate improved title suggestion
-        result.title_suggestion = self._suggest_title(
-            document, document_text, result.extracted_entities
-        )
-        
-        # Extract tables if advanced OCR enabled
-        if self.advanced_ocr_enabled and original_file_path:
-            result.metadata["tables"] = self._extract_tables(original_file_path)
-        
-        logger.info(f"AI scan completed for document {document.pk}")
-        logger.debug(f"Scan results: {result.to_dict()}")
-        
-        return result
+        try:
+            # Extract entities using NER
+            result.extracted_entities = self._extract_entities(document_text)
+            
+            # Analyze and suggest tags
+            result.tags = self._suggest_tags(document, document_text, result.extracted_entities)
+            
+            # Detect correspondent
+            result.correspondent = self._detect_correspondent(
+                document, document_text, result.extracted_entities
+            )
+            
+            # Classify document type
+            result.document_type = self._classify_document_type(
+                document, document_text, result.extracted_entities
+            )
+            
+            # Suggest storage path
+            result.storage_path = self._suggest_storage_path(
+                document, document_text, result
+            )
+            
+            # Extract custom fields
+            result.custom_fields = self._extract_custom_fields(
+                document, document_text, result.extracted_entities
+            )
+            
+            # Suggest workflows
+            result.workflows = self._suggest_workflows(document, document_text, result)
+            
+            # Generate improved title suggestion
+            result.title_suggestion = self._suggest_title(
+                document, document_text, result.extracted_entities
+            )
+            
+            # Extract tables if advanced OCR enabled
+            if self.advanced_ocr_enabled and original_file_path:
+                result.metadata["tables"] = self._extract_tables(original_file_path)
+            
+            duration = time.time() - start_time
+            
+            log_structured(
+                "info",
+                "AI scan completed successfully",
+                document_id=document.pk,
+                duration_seconds=duration,
+                tags_count=len(result.tags),
+                has_correspondent=result.correspondent is not None,
+                has_document_type=result.document_type is not None,
+            )
+            
+            # Record metrics
+            if METRICS_AVAILABLE:
+                metrics.record_scan_success()
+                metrics.record_scan_duration(duration)
+                
+                # Record confidence metrics for each suggestion type
+                for tag_id, confidence in result.tags:
+                    metrics.record_confidence("tag", document.pk, confidence)
+                
+                if result.correspondent:
+                    metrics.record_confidence("correspondent", document.pk, result.correspondent[1])
+                
+                if result.document_type:
+                    metrics.record_confidence("document_type", document.pk, result.document_type[1])
+                
+                if result.storage_path:
+                    metrics.record_confidence("storage_path", document.pk, result.storage_path[1])
+            
+            return result
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            
+            log_structured(
+                "error",
+                "AI scan failed",
+                document_id=document.pk,
+                duration_seconds=duration,
+                error=str(e),
+                error_type="scan_failure"
+            )
+            
+            if METRICS_AVAILABLE:
+                metrics.record_scan_failure()
+                metrics.record_scan_duration(duration)
+                metrics.record_error("scan_failure")
+            
+            raise
 
     def _extract_entities(self, text: str) -> Dict[str, Any]:
         """
@@ -734,7 +859,15 @@ class AIDocumentScanner:
                         tag = Tag.objects.get(pk=tag_id)
                         document.add_nested_tags([tag])
                         applied["tags"].append({"id": tag_id, "name": tag.name})
-                        logger.info(f"Auto-applied tag: {tag.name}")
+                        log_structured(
+                            "info",
+                            "Auto-applied tag",
+                            document_id=document.pk,
+                            tag_name=tag.name,
+                            confidence=confidence
+                        )
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_applied("tag")
                     elif confidence >= self.suggest_threshold:
                         tag = Tag.objects.get(pk=tag_id)
                         suggestions["tags"].append({
@@ -742,6 +875,12 @@ class AIDocumentScanner:
                             "name": tag.name,
                             "confidence": confidence,
                         })
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("tag")
+                    else:
+                        # Below suggest threshold
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("tag")
                 
                 # Apply correspondent
                 if scan_result.correspondent:
@@ -753,7 +892,15 @@ class AIDocumentScanner:
                             "id": corr_id,
                             "name": correspondent.name,
                         }
-                        logger.info(f"Auto-applied correspondent: {correspondent.name}")
+                        log_structured(
+                            "info",
+                            "Auto-applied correspondent",
+                            document_id=document.pk,
+                            correspondent_name=correspondent.name,
+                            confidence=confidence
+                        )
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_applied("correspondent")
                     elif confidence >= self.suggest_threshold:
                         correspondent = Correspondent.objects.get(pk=corr_id)
                         suggestions["correspondent"] = {
@@ -761,6 +908,11 @@ class AIDocumentScanner:
                             "name": correspondent.name,
                             "confidence": confidence,
                         }
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("correspondent")
+                    else:
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("correspondent")
                 
                 # Apply document type
                 if scan_result.document_type:
@@ -772,7 +924,15 @@ class AIDocumentScanner:
                             "id": type_id,
                             "name": doc_type.name,
                         }
-                        logger.info(f"Auto-applied document type: {doc_type.name}")
+                        log_structured(
+                            "info",
+                            "Auto-applied document type",
+                            document_id=document.pk,
+                            document_type_name=doc_type.name,
+                            confidence=confidence
+                        )
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_applied("document_type")
                     elif confidence >= self.suggest_threshold:
                         doc_type = DocumentType.objects.get(pk=type_id)
                         suggestions["document_type"] = {
@@ -780,6 +940,11 @@ class AIDocumentScanner:
                             "name": doc_type.name,
                             "confidence": confidence,
                         }
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("document_type")
+                    else:
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("document_type")
                 
                 # Apply storage path
                 if scan_result.storage_path:
@@ -791,7 +956,15 @@ class AIDocumentScanner:
                             "id": path_id,
                             "name": storage_path.name,
                         }
-                        logger.info(f"Auto-applied storage path: {storage_path.name}")
+                        log_structured(
+                            "info",
+                            "Auto-applied storage path",
+                            document_id=document.pk,
+                            storage_path_name=storage_path.name,
+                            confidence=confidence
+                        )
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_applied("storage_path")
                     elif confidence >= self.suggest_threshold:
                         storage_path = StoragePath.objects.get(pk=path_id)
                         suggestions["storage_path"] = {
@@ -799,6 +972,11 @@ class AIDocumentScanner:
                             "name": storage_path.name,
                             "confidence": confidence,
                         }
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("storage_path")
+                    else:
+                        if METRICS_AVAILABLE:
+                            metrics.record_suggestion_ignored("storage_path")
                 
                 # Save document with changes
                 document.save()
