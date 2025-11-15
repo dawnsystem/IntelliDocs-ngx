@@ -14,15 +14,12 @@ According to agents.md requirements:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional, Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth.models import User
 
 if TYPE_CHECKING:
     pass
-from typing import TYPE_CHECKING
-from typing import Any
-
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
