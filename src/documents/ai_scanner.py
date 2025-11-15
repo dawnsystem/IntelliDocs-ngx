@@ -32,9 +32,6 @@ if TYPE_CHECKING:
         CustomField,
         Workflow,
     )
-    from documents.models import CustomField
-    from documents.models import Document
-    from documents.models import Workflow
 
 logger = logging.getLogger("paperless.ai_scanner")
 
