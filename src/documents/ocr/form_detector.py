@@ -8,7 +8,6 @@ This module provides capabilities to:
 """
 
 import logging
-from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image

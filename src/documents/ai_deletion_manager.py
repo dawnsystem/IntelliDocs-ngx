@@ -14,15 +14,12 @@ According to agents.md requirements:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING, Dict, List, Optional, Any
 
-from django.conf import settings
 from django.contrib.auth.models import User
-from django.utils import timezone
 
 if TYPE_CHECKING:
-    from documents.models import Document, DeletionRequest
+    pass
 
 logger = logging.getLogger("paperless.ai_deletion")
 

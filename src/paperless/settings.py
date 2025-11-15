@@ -926,6 +926,25 @@ CELERY_BEAT_SCHEDULE = _parse_beat_schedule()
 # https://docs.celeryq.dev/en/stable/userguide/configuration.html#beat-schedule-filename
 CELERY_BEAT_SCHEDULE_FILENAME = str(DATA_DIR / "celerybeat-schedule.db")
 
+# AI Scanner Task Queue Configuration
+# Separate low-priority queue for AI tasks to prevent blocking document consumption
+# https://docs.celeryq.dev/en/stable/userguide/routing.html
+CELERY_TASK_ROUTES = {
+    "documents.tasks.scan_document_ai": {
+        "queue": "ai_tasks",
+        "routing_key": "ai_tasks",
+    },
+}
+
+# Rate limiting for AI tasks to prevent resource exhaustion
+# Format: "number_of_tasks/time_period" (s=seconds, m=minutes, h=hours)
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-annotations
+CELERY_TASK_ANNOTATIONS = {
+    "documents.tasks.scan_document_ai": {
+        "rate_limit": "10/m",  # Max 10 AI scans per minute
+    },
+}
+
 
 # Cachalot: Database read cache.
 def _parse_cachalot_settings():

@@ -8,8 +8,7 @@ This module provides handwriting OCR capabilities using:
 """
 
 import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any
 import numpy as np
 from PIL import Image
 

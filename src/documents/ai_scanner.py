@@ -28,10 +28,6 @@ from django.db import transaction
 if TYPE_CHECKING:
     from documents.models import (
         Document,
-        Tag,
-        Correspondent,
-        DocumentType,
-        StoragePath,
         CustomField,
         Workflow,
     )
@@ -402,7 +398,6 @@ class AIDocumentScanner:
         Returns:
             (document_type_id, confidence) or None
         """
-        from documents.models import DocumentType
         from documents.matching import match_document_types
         
         try:
@@ -442,7 +437,6 @@ class AIDocumentScanner:
         Returns:
             (storage_path_id, confidence) or None
         """
-        from documents.models import StoragePath
         from documents.matching import match_storage_paths
         
         try:

@@ -8,7 +8,6 @@ traditional ML approaches by using transformer models.
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
@@ -21,7 +20,7 @@ from transformers import (
 )
 
 if TYPE_CHECKING:
-    from documents.models import Document
+    pass
 
 logger = logging.getLogger("paperless.ml.classifier")
 

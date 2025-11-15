@@ -756,95 +756,60 @@ class ConsumerPlugin(
     def _run_ai_scanner(self, document, text):
         """
         Run AI scanner on the document to automatically detect and apply metadata.
-        
+
         This is called during document consumption to leverage AI/ML capabilities
         for automatic metadata management as specified in agents.md.
-        
+
+        The AI scanning is now performed asynchronously via Celery task queue
+        to prevent blocking document consumption. The task runs in a separate
+        low-priority queue with rate limiting.
+
         Args:
             document: The Document model instance
             text: The extracted document text
         """
         try:
-            from documents.ai_scanner import get_ai_scanner
-            
-            scanner = get_ai_scanner()
-            
+            from documents.tasks import scan_document_ai
+
             # Get the original file path if available
             original_file_path = str(self.working_copy) if self.working_copy else None
-            
-            # Perform comprehensive AI scan
-            self.log.info(f"Running AI scanner on document: {document.title}")
-            scan_result = scanner.scan_document(
-                document=document,
-                document_text=text,
-                original_file_path=original_file_path,
-            )
-            
-            # Apply scan results (auto-apply high confidence, suggest medium confidence)
-            results = scanner.apply_scan_results(
-                document=document,
-                scan_result=scan_result,
-                auto_apply=True,  # Auto-apply high confidence suggestions
-            )
-            
-            # Log what was applied and suggested
-            if results["applied"]["tags"]:
+
+            # Check if we should run synchronously (for testing)
+            run_sync = getattr(settings, "PAPERLESS_AI_SCANNER_SYNC", False)
+
+            if run_sync:
+                # Run synchronously for testing
                 self.log.info(
-                    f"AI auto-applied tags: {[t['name'] for t in results['applied']['tags']]}"
+                    f"Running AI scanner synchronously on document: {document.title}",
                 )
-            
-            if results["applied"]["correspondent"]:
+                scan_document_ai(
+                    document_id=document.pk,
+                    document_text=text,
+                    original_file_path=original_file_path,
+                    auto_apply=True,
+                )
+            else:
+                # Queue AI scanning task asynchronously (non-blocking)
                 self.log.info(
-                    f"AI auto-applied correspondent: {results['applied']['correspondent']['name']}"
+                    f"Queuing AI scanner task for document: {document.title}",
                 )
-            
-            if results["applied"]["document_type"]:
+                scan_document_ai.delay(
+                    document_id=document.pk,
+                    document_text=text,
+                    original_file_path=original_file_path,
+                    auto_apply=True,
+                )
                 self.log.info(
-                    f"AI auto-applied document type: {results['applied']['document_type']['name']}"
+                    f"AI scanning queued for background processing (document: {document.title})",
                 )
-            
-            if results["applied"]["storage_path"]:
-                self.log.info(
-                    f"AI auto-applied storage path: {results['applied']['storage_path']['name']}"
-                )
-            
-            # Log suggestions for user review
-            if results["suggestions"]["tags"]:
-                self.log.info(
-                    f"AI suggested tags (require review): "
-                    f"{[t['name'] for t in results['suggestions']['tags']]}"
-                )
-            
-            if results["suggestions"]["correspondent"]:
-                self.log.info(
-                    f"AI suggested correspondent (requires review): "
-                    f"{results['suggestions']['correspondent']['name']}"
-                )
-            
-            if results["suggestions"]["document_type"]:
-                self.log.info(
-                    f"AI suggested document type (requires review): "
-                    f"{results['suggestions']['document_type']['name']}"
-                )
-            
-            if results["suggestions"]["storage_path"]:
-                self.log.info(
-                    f"AI suggested storage path (requires review): "
-                    f"{results['suggestions']['storage_path']['name']}"
-                )
-            
-            # Store suggestions in document metadata for UI to display
-            # This allows the frontend to show AI suggestions to users
-            if not hasattr(document, '_ai_suggestions'):
-                document._ai_suggestions = results["suggestions"]
-            
+
         except ImportError:
-            # AI scanner not available, skip
-            self.log.debug("AI scanner not available, skipping AI analysis")
+            # AI scanner task not available, skip
+            self.log.debug("AI scanner task not available, skipping AI analysis")
         except Exception as e:
-            # Don't fail the entire consumption if AI scanner fails
+            # Don't fail the entire consumption if AI scanner queueing fails
             self.log.warning(
-                f"AI scanner failed for document {document.title}: {e}",
+                f"Failed to queue AI scanner for document {document.title}: {e}",
                 exc_info=True,
             )
 

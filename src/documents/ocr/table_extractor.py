@@ -8,9 +8,7 @@ This module uses various techniques to detect and extract tables from documents:
 """
 
 import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-import numpy as np
+from typing import List, Dict, Any, Optional
 from PIL import Image
 
 logger = logging.getLogger(__name__)
