@@ -13,12 +13,22 @@ This enables automatic metadata extraction and better document understanding.
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING
 
 from transformers import pipeline
 
 from documents.ml.model_cache import ModelCacheManager
+from documents.patterns import (
+    ALL_AMOUNT_PATTERNS,
+    ALL_DATE_PATTERNS,
+    ALL_INVOICE_PATTERNS,
+    CONTRACT_KEYWORD_PATTERN,
+    EMAIL_PATTERN,
+    INVOICE_KEYWORD_PATTERN,
+    LETTER_KEYWORD_PATTERN,
+    PHONE_PATTERN,
+    RECEIPT_KEYWORD_PATTERN,
+)
 
 if TYPE_CHECKING:
     pass
@@ -110,46 +120,19 @@ class DocumentNER:
         logger.info("DocumentNER initialized successfully")
 
     def _compile_patterns(self) -> None:
-        """Compile regex patterns for common entities and document classification."""
-        # Date patterns
-        self.date_patterns = [
-            re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"),  # MM/DD/YYYY, DD-MM-YYYY
-            re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}"),  # YYYY-MM-DD
-            re.compile(
-                r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}",
-                re.IGNORECASE,
-            ),  # Month DD, YYYY
-        ]
+        """Load regex patterns from centralized patterns module."""
+        # Use centralized patterns from documents.patterns
+        self.date_patterns = ALL_DATE_PATTERNS
+        self.amount_patterns = ALL_AMOUNT_PATTERNS
+        self.invoice_patterns = ALL_INVOICE_PATTERNS
+        self.email_pattern = EMAIL_PATTERN
+        self.phone_pattern = PHONE_PATTERN
 
-        # Amount patterns
-        self.amount_patterns = [
-            re.compile(r"\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # $1,234.56
-            re.compile(r"\d{1,3}(?:,\d{3})*(?:\.\d{2})?\s?USD"),  # 1,234.56 USD
-            re.compile(r"€\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # €1,234.56
-            re.compile(r"£\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"),  # £1,234.56
-        ]
-
-        # Invoice number patterns
-        self.invoice_patterns = [
-            re.compile(r"(?:Invoice|Inv\.?)\s*#?\s*(\w+)", re.IGNORECASE),
-            re.compile(r"(?:Invoice|Inv\.?)\s*(?:Number|No\.?)\s*:?\s*(\w+)", re.IGNORECASE),
-        ]
-
-        # Email pattern
-        self.email_pattern = re.compile(
-            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
-        )
-
-        # Phone pattern (US/International)
-        self.phone_pattern = re.compile(
-            r"(?:\+\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}",
-        )
-
-        # Document type classification patterns (compiled for performance)
-        self.invoice_keyword_pattern = re.compile(r"\binvoice\b", re.IGNORECASE)
-        self.receipt_keyword_pattern = re.compile(r"\breceipt\b", re.IGNORECASE)
-        self.contract_keyword_pattern = re.compile(r"\bcontract\b|\bagreement\b", re.IGNORECASE)
-        self.letter_keyword_pattern = re.compile(r"\bdear\b|\bsincerely\b", re.IGNORECASE)
+        # Document type classification patterns
+        self.invoice_keyword_pattern = INVOICE_KEYWORD_PATTERN
+        self.receipt_keyword_pattern = RECEIPT_KEYWORD_PATTERN
+        self.contract_keyword_pattern = CONTRACT_KEYWORD_PATTERN
+        self.letter_keyword_pattern = LETTER_KEYWORD_PATTERN
 
     def extract_entities(self, text: str) -> dict[str, list[str]]:
         """

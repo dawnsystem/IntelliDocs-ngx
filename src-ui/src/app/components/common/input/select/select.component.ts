@@ -34,21 +34,28 @@ import { AbstractInputComponent } from '../abstract-input'
     NgxBootstrapIconsModule,
   ],
 })
+interface SelectItem {
+  id: number
+  name: string
+  private?: boolean
+  [key: string]: unknown // Allow additional properties
+}
+
 export class SelectComponent extends AbstractInputComponent<number> {
   constructor() {
     super()
     this.addItemRef = this.addItem.bind(this)
   }
 
-  _items: any[]
+  _items: SelectItem[]
 
   @Input()
-  set items(items) {
+  set items(items: SelectItem[]) {
     this._items = items
     if (items && this.value) this.checkForPrivateItems(this.value)
   }
 
-  writeValue(newValue: any): void {
+  writeValue(newValue: number | number[]): void {
     if (newValue && this._items) {
       this.checkForPrivateItems(newValue)
       this.items = [...this._items] // we need to explicitly re-set items
@@ -56,7 +63,7 @@ export class SelectComponent extends AbstractInputComponent<number> {
     super.writeValue(newValue)
   }
 
-  checkForPrivateItems(value: any) {
+  checkForPrivateItems(value: number | number[]): void {
     if (Array.isArray(value)) {
       if (value.length > 0) value.forEach((id) => this.checkForPrivateItem(id))
     } else {
@@ -64,7 +71,7 @@ export class SelectComponent extends AbstractInputComponent<number> {
     }
   }
 
-  checkForPrivateItem(id) {
+  checkForPrivateItem(id: number): void {
     if (this._items.find((i) => i.id === id) === undefined) {
       this._items.push({
         id: id,
@@ -74,15 +81,15 @@ export class SelectComponent extends AbstractInputComponent<number> {
     }
   }
 
-  get items(): any[] {
+  get items(): SelectItem[] {
     return this._items
   }
 
   @Input()
-  textColor: any
+  textColor: string | ((item: SelectItem) => string)
 
   @Input()
-  backgroundColor: any
+  backgroundColor: string | ((item: SelectItem) => string)
 
   @Input()
   allowNull: boolean = false

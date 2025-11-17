@@ -16,6 +16,20 @@ import { NgxBootstrapIconsModule } from 'ngx-bootstrap-icons'
 import { interval, take } from 'rxjs'
 import { Toast } from 'src/app/services/toast.service'
 
+interface HttpError {
+  status?: number
+  statusText?: string
+  url?: string
+  message?: string
+  error?: {
+    detail?: string
+    [key: string]: unknown
+  } | string
+  [key: string]: unknown
+}
+
+type ErrorType = HttpError | Error | string | { message?: string; [key: string]: unknown }
+
 @Component({
   selector: 'pngx-toast',
   imports: [
@@ -39,7 +53,7 @@ export class ToastComponent implements OnDestroy {
   @Output() closed: EventEmitter<Toast> = new EventEmitter<Toast>()
 
   public copied: boolean = false
-  private copiedTimeoutId: any
+  private copiedTimeoutId: ReturnType<typeof setTimeout> | null
 
   onShown(toast: Toast) {
     if (!this.autohide) return
@@ -57,7 +71,7 @@ export class ToastComponent implements OnDestroy {
       })
   }
 
-  public isDetailedError(error: any): boolean {
+  public isDetailedError(error: ErrorType): boolean {
     return (
       typeof error === 'object' &&
       'status' in error &&
@@ -68,7 +82,7 @@ export class ToastComponent implements OnDestroy {
     )
   }
 
-  public copyError(error: any) {
+  public copyError(error: ErrorType): void {
     this.clipboard.copy(JSON.stringify(error))
     this.copied = true
 
@@ -91,8 +105,13 @@ export class ToastComponent implements OnDestroy {
     }
   }
 
-  getErrorText(error: any) {
-    let text: string = error.error?.detail ?? error.error ?? ''
+  getErrorText(error: ErrorType): string {
+    if (typeof error === 'string') return error.slice(0, 200)
+    if (error instanceof Error) return error.message.slice(0, 200)
+
+    const httpError = error as HttpError
+    let text: string = (httpError.error as { detail?: string })?.detail ??
+                      (typeof httpError.error === 'string' ? httpError.error : '') ?? ''
     if (typeof text === 'object') text = JSON.stringify(text)
     return `${text.slice(0, 200)}${text.length > 200 ? '...' : ''}`
   }
