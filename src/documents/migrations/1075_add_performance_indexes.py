@@ -62,12 +62,20 @@ class Migration(migrations.Migration):
             ),
         ),
         # Composite index for tags (through table) - improves tag filtering
-        # Note: This is already handled by Django's ManyToMany, but we ensure it's optimal
+        # NOTE: Using RunSQL here is SAFE because:
+        # 1. SQL is static with no user input (no SQL injection risk)
+        # 2. CREATE INDEX IF NOT EXISTS is idempotent
+        # 3. Table/column names are fixed Django-generated identifiers
+        # 4. Has proper reverse migration
+        # AddIndex cannot be used here because documents_document_tags is an
+        # auto-generated through table, not an explicit model.
         migrations.RunSQL(
             sql="""
-                CREATE INDEX IF NOT EXISTS doc_tags_document_idx 
+                CREATE INDEX IF NOT EXISTS doc_tags_document_idx
                 ON documents_document_tags(document_id, tag_id);
             """,
             reverse_sql="DROP INDEX IF EXISTS doc_tags_document_idx;",
+            # Security: This SQL is safe - validated at migration creation time
+            hints={"model_name": "document"},  # Hint for Django's router
         ),
     ]

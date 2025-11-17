@@ -345,6 +345,18 @@ class AIDocumentScanner:
             f"Starting AI scan for document: {document.title} (ID: {document.pk})",
         )
 
+        # Security: Limit document size to prevent Out Of Memory (OOM) attacks
+        # Maximum 10MB of text (approximately 10 million characters)
+        MAX_DOCUMENT_SIZE = 10_000_000
+
+        if document_text and len(document_text) > MAX_DOCUMENT_SIZE:
+            original_length = len(document_text)
+            document_text = document_text[:MAX_DOCUMENT_SIZE]
+            logger.warning(
+                f"Document too large ({original_length:,} chars), truncated to {MAX_DOCUMENT_SIZE:,} chars for AI processing. "
+                f"Document: {document.title} (ID: {document.pk})"
+            )
+
         result = AIScanResult()
 
         # Extract entities using NER
