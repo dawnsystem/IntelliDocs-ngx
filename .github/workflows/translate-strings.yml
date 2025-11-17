@@ -3,10 +3,17 @@ on:
   push:
     branches:
       - dev
+
+env:
+  DEFAULT_PYTHON_VERSION: "3.11"
+  DEFAULT_UV_VERSION: "0.9.x"
+  DEFAULT_NODE_VERSION: "20.x"
+  DEFAULT_PNPM_VERSION: "10"
+
 jobs:
   generate-translate-strings:
     name: Generate Translation Strings
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -18,14 +25,19 @@ jobs:
       - name: Set up Python
         id: setup-python
         uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON_VERSION }}
       - name: Install system dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -qq --no-install-recommends gettext
+          set -e
+          sudo apt-get update -q
+          sudo apt-get install -q --no-install-recommends gettext
       - name: Install uv
         uses: astral-sh/setup-uv@v6
         with:
+          version: ${{ env.DEFAULT_UV_VERSION }}
           enable-cache: true
+          python-version: ${{ env.DEFAULT_PYTHON_VERSION }}
       - name: Install backend python dependencies
         run: |
           uv sync \
@@ -36,11 +48,11 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Use Node.js 20
+          version: ${{ env.DEFAULT_PNPM_VERSION }}
+      - name: Use Node.js ${{ env.DEFAULT_NODE_VERSION }}
         uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: 'src-ui/pnpm-lock.yaml'
       - name: Cache frontend dependencies

@@ -8,7 +8,7 @@ permissions:
 jobs:
   pr-bot:
     name: Automated PR Bot
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Label PR by file path or branch name
         # see .github/labeler.yml for the labeler config
@@ -51,7 +51,7 @@ jobs:
               core.info(`Added labels based on title: ${labels.join(', ')}`);
             }
       - name: Label bot-generated PRs
-        if: ${{ contains(github.actor, 'dependabot') || contains(github.actor, 'crowdin-bot') }}
+        if: ${{ github.actor == 'dependabot[bot]' || github.actor == 'crowdin-bot' }}
         uses: actions/github-script@v8
         with:
           script: |
@@ -76,7 +76,7 @@ jobs:
               });
             }
       - name: Welcome comment
-        if: ${{ !contains(github.actor, 'bot') }}
+        if: ${{ github.actor != 'dependabot[bot]' && github.actor != 'crowdin-bot' && !endsWith(github.actor, '[bot]') }}
         uses: actions/github-script@v8
         with:
           script: |
@@ -84,7 +84,7 @@ jobs:
             const user = pr.user.login;
 
             const { data: members } = await github.rest.orgs.listMembers({
-              org: 'paperless-ngx',
+              org: '${{ github.repository_owner }}',
             });
 
             const memberLogins = members.map(m => m.login.toLowerCase());

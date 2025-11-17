@@ -14,6 +14,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  DEFAULT_PYTHON_VERSION: "3.12"
+  DEFAULT_UV_VERSION: "0.9.x"
 
 jobs:
   # ============================================================================
@@ -30,12 +32,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ env.DEFAULT_PYTHON_VERSION }}
 
       - name: Install UV package manager
         uses: astral-sh/setup-uv@v6
         with:
-          version: '0.9.x'
+          version: ${{ env.DEFAULT_UV_VERSION }}
 
       - name: Install system dependencies for OpenCV/ML
         run: |
@@ -84,6 +86,11 @@ jobs:
 
       - name: Run ML smoke tests
         run: |
+          # Verify test file exists before running
+          if [ ! -f "src/documents/tests/test_ml_smoke.py" ]; then
+            echo "ERROR: ML smoke test file not found at src/documents/tests/test_ml_smoke.py"
+            exit 1
+          fi
           uv run pytest src/documents/tests/test_ml_smoke.py -v --tb=short
 
   # ============================================================================
@@ -184,7 +191,9 @@ jobs:
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "tag=latest" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            # Sanitize tag to only contain valid Docker tag characters
+            SANITIZED_TAG=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            echo "tag=${SANITIZED_TAG}" >> $GITHUB_OUTPUT
           fi
 
       - name: Pull Docker image
@@ -207,9 +216,10 @@ jobs:
 
       - name: Test Django migrations check
         run: |
+          # Verify manage.py exists in container and run migrations check
           docker run --rm \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }} \
-            python src/manage.py makemigrations --check --dry-run
+            sh -c "test -f src/manage.py && python src/manage.py makemigrations --check --dry-run"
 
       - name: Verify OpenCV system dependencies
         run: |

@@ -15,7 +15,10 @@ env:
   DEFAULT_UV_VERSION: "0.9.x"
   # This is the default version of Python to use in most steps which aren't specific
   DEFAULT_PYTHON_VERSION: "3.11"
-  NLTK_DATA: "/usr/share/nltk_data"
+  DEFAULT_NODE_VERSION: "20.x"
+  DEFAULT_PNPM_VERSION: "10"
+  # Use workspace for NLTK data to ensure it exists and is writable
+  NLTK_DATA: "${{ github.workspace }}/.nltk_data"
 jobs:
   detect-duplicate:
     name: Detect Duplicate Run
@@ -131,7 +134,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
           android: true
@@ -158,8 +161,9 @@ jobs:
           python-version: ${{ steps.setup-python.outputs.python-version }}
       - name: Install system dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -qq --no-install-recommends unpaper tesseract-ocr imagemagick ghostscript libzbar0 poppler-utils libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 libgl1
+          set -e
+          sudo apt-get update -q
+          sudo apt-get install -q --no-install-recommends unpaper tesseract-ocr imagemagick ghostscript libzbar0 poppler-utils libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 libgl1
       - name: Configure ImageMagick
         run: |
           sudo cp docker/rootfs/etc/ImageMagick-6/paperless-policy.xml /etc/ImageMagick-6/policy.xml
@@ -219,11 +223,11 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Use Node.js 20
+          version: ${{ env.DEFAULT_PNPM_VERSION }}
+      - name: Use Node.js ${{ env.DEFAULT_NODE_VERSION }}
         uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: 'src-ui/pnpm-lock.yaml'
       - name: Cache frontend dependencies
@@ -252,11 +256,11 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Use Node.js 20
+          version: ${{ env.DEFAULT_PNPM_VERSION }}
+      - name: Use Node.js ${{ env.DEFAULT_NODE_VERSION }}
         uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: 'src-ui/pnpm-lock.yaml'
       - name: Cache frontend dependencies
@@ -298,7 +302,7 @@ jobs:
         shard-count: [2]
     steps:
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
           android: true
@@ -310,11 +314,11 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Use Node.js 20
+          version: ${{ env.DEFAULT_PNPM_VERSION }}
+      - name: Use Node.js ${{ env.DEFAULT_NODE_VERSION }}
         uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: 'src-ui/pnpm-lock.yaml'
       - name: Cache frontend dependencies
@@ -337,7 +341,7 @@ jobs:
       - name: Install Playwright system dependencies
         run: npx playwright install-deps
       - name: Install dependencies
-        run: cd src-ui && pnpm install --no-frozen-lockfile
+        run: cd src-ui && pnpm install --frozen-lockfile
       - name: Install Playwright
         run: cd src-ui && pnpm exec playwright install
       - name: Run Playwright e2e tests
@@ -353,11 +357,11 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Use Node.js 20
+          version: ${{ env.DEFAULT_PNPM_VERSION }}
+      - name: Use Node.js ${{ env.DEFAULT_NODE_VERSION }}
         uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: ${{ env.DEFAULT_NODE_VERSION }}
           cache: 'pnpm'
           cache-dependency-path: 'src-ui/pnpm-lock.yaml'
       - name: Cache frontend dependencies
@@ -367,7 +371,7 @@ jobs:
           path: |
             ~/.pnpm-store
             ~/.cache
-          key: ${{ runner.os }}-frontenddeps-${{ hashFiles('src-ui/package-lock.json') }}
+          key: ${{ runner.os }}-frontenddeps-${{ hashFiles('src-ui/pnpm-lock.yaml') }}
       - name: Re-link Angular cli
         run: cd src-ui && pnpm link @angular/cli
       - name: Build frontend and upload analysis
@@ -387,7 +391,7 @@ jobs:
       - tests-frontend-e2e
     steps:
       - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
           android: true
