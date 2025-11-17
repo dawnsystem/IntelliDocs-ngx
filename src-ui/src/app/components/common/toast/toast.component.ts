@@ -1,6 +1,13 @@
 import { Clipboard } from '@angular/cdk/clipboard'
 import { DecimalPipe } from '@angular/common'
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core'
+import {
+  Component,
+  EventEmitter,
+  Input,
+  OnDestroy,
+  Output,
+  inject,
+} from '@angular/core'
 import {
   NgbProgressbarModule,
   NgbToastModule,
@@ -20,7 +27,7 @@ import { Toast } from 'src/app/services/toast.service'
   templateUrl: './toast.component.html',
   styleUrl: './toast.component.scss',
 })
-export class ToastComponent {
+export class ToastComponent implements OnDestroy {
   private clipboard = inject(Clipboard)
 
   @Input() toast: Toast
@@ -32,6 +39,7 @@ export class ToastComponent {
   @Output() closed: EventEmitter<Toast> = new EventEmitter<Toast>()
 
   public copied: boolean = false
+  private copiedTimeoutId: any
 
   onShown(toast: Toast) {
     if (!this.autohide) return
@@ -63,9 +71,24 @@ export class ToastComponent {
   public copyError(error: any) {
     this.clipboard.copy(JSON.stringify(error))
     this.copied = true
-    setTimeout(() => {
+
+    // Clear any existing timeout to prevent memory leaks
+    if (this.copiedTimeoutId) {
+      clearTimeout(this.copiedTimeoutId)
+    }
+
+    this.copiedTimeoutId = setTimeout(() => {
       this.copied = false
+      this.copiedTimeoutId = null
     }, 3000)
+  }
+
+  public ngOnDestroy(): void {
+    // Clean up timeout to prevent memory leak
+    if (this.copiedTimeoutId) {
+      clearTimeout(this.copiedTimeoutId)
+      this.copiedTimeoutId = null
+    }
   }
 
   getErrorText(error: any) {

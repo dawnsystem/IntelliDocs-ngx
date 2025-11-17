@@ -163,6 +163,14 @@ jobs:
       - name: List installed Python dependencies
         run: |
           uv pip list
+      - name: Validate ML/AI dependencies
+        run: |
+          echo "Validating ML/AI dependencies..."
+          uv run python -c "import torch; print(f'✓ PyTorch {torch.__version__} installed')"
+          uv run python -c "import transformers; print(f'✓ Transformers {transformers.__version__} installed')"
+          uv run python -c "import sentence_transformers; print(f'✓ Sentence-Transformers {sentence_transformers.__version__} installed')"
+          uv run python -c "from documents.ai_scanner import AIDocumentScanner; print('✓ AI Scanner can be imported successfully')"
+          echo "All ML/AI dependencies validated successfully!"
       - name: Install or update NLTK dependencies
         run: uv run python -m nltk.downloader punkt punkt_tab snowball_data stopwords -d ${{ env.NLTK_DATA }}
       - name: Tests

@@ -6,7 +6,7 @@ import {
   moveItemInArray,
 } from '@angular/cdk/drag-drop'
 import { NgClass } from '@angular/common'
-import { Component, HostListener, inject, OnInit } from '@angular/core'
+import { Component, HostListener, inject, OnDestroy, OnInit } from '@angular/core'
 import { ActivatedRoute, Router, RouterModule } from '@angular/router'
 import {
   NgbCollapseModule,
@@ -74,7 +74,7 @@ import { ToastsDropdownComponent } from './toasts-dropdown/toasts-dropdown.compo
 })
 export class AppFrameComponent
   extends ComponentWithPermissions
-  implements OnInit, ComponentCanDeactivate
+  implements OnInit, OnDestroy, ComponentCanDeactivate
 {
   router = inject(Router)
   private activatedRoute = inject(ActivatedRoute)
@@ -93,6 +93,7 @@ export class AppFrameComponent
   isMenuCollapsed: boolean = true
 
   slimSidebarAnimating: boolean = false
+  private slimSidebarTimeoutId: any
 
   constructor() {
     super()
@@ -141,8 +142,15 @@ export class AppFrameComponent
   toggleSlimSidebar(): void {
     this.slimSidebarAnimating = true
     this.slimSidebarEnabled = !this.slimSidebarEnabled
-    setTimeout(() => {
+
+    // Clear any existing timeout
+    if (this.slimSidebarTimeoutId) {
+      clearTimeout(this.slimSidebarTimeoutId)
+    }
+
+    this.slimSidebarTimeoutId = setTimeout(() => {
       this.slimSidebarAnimating = false
+      this.slimSidebarTimeoutId = null
     }, 200) // slightly longer than css animation for slim sidebar
   }
 
@@ -306,5 +314,13 @@ export class AppFrameComponent
       this.settingsService.get(SETTINGS_KEYS.SIDEBAR_VIEWS_SHOW_COUNT) &&
       !this.settingsService.organizingSidebarSavedViews
     )
+  }
+
+  ngOnDestroy(): void {
+    // Clean up timeout to prevent memory leak
+    if (this.slimSidebarTimeoutId) {
+      clearTimeout(this.slimSidebarTimeoutId)
+      this.slimSidebarTimeoutId = null
+    }
   }
 }

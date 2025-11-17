@@ -209,6 +209,10 @@ export class DocumentDetailComponent
   private deviceDetectorService = inject(DeviceDetectorService)
   private savedViewService = inject(SavedViewService)
 
+  // Timeout IDs for cleanup
+  private navSelectTimeoutId: any
+  private previewLoadedTimeoutId: any
+
   @ViewChild('inputTitle')
   titleInput: TextComponent
 
@@ -286,7 +290,13 @@ export class DocumentDetailComponent
       this.nav?.activeId == 4
     ) {
       // its visible
-      setTimeout(() => this.nav?.select(1))
+      if (this.navSelectTimeoutId) {
+        clearTimeout(this.navSelectTimeoutId)
+      }
+      this.navSelectTimeoutId = setTimeout(() => {
+        this.nav?.select(1)
+        this.navSelectTimeoutId = null
+      })
     }
   }
 
@@ -632,6 +642,16 @@ export class DocumentDetailComponent
   }
 
   ngOnDestroy(): void {
+    // Clean up timeouts to prevent memory leaks
+    if (this.navSelectTimeoutId) {
+      clearTimeout(this.navSelectTimeoutId)
+      this.navSelectTimeoutId = null
+    }
+    if (this.previewLoadedTimeoutId) {
+      clearTimeout(this.previewLoadedTimeoutId)
+      this.previewLoadedTimeoutId = null
+    }
+
     this.unsubscribeNotifier.next(this)
     this.unsubscribeNotifier.complete()
   }
@@ -1138,8 +1158,14 @@ export class DocumentDetailComponent
   pdfPreviewLoaded(pdf: PDFDocumentProxy) {
     this.previewNumPages = pdf.numPages
     if (this.password) this.requiresPassword = false
-    setTimeout(() => {
+
+    if (this.previewLoadedTimeoutId) {
+      clearTimeout(this.previewLoadedTimeoutId)
+    }
+
+    this.previewLoadedTimeoutId = setTimeout(() => {
       this.previewLoaded = true
+      this.previewLoadedTimeoutId = null
     }, 300)
   }
 

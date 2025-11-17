@@ -226,6 +226,11 @@ RUN --mount=type=cache,target=${UV_CACHE_DIR},id=python-cache \
     && python3 -W ignore::RuntimeWarning -m nltk.downloader -d "/usr/share/nltk_data" snowball_data \
     && python3 -W ignore::RuntimeWarning -m nltk.downloader -d "/usr/share/nltk_data" stopwords \
     && python3 -W ignore::RuntimeWarning -m nltk.downloader -d "/usr/share/nltk_data" punkt_tab \
+  && echo "Validating ML/AI dependencies" \
+    && python3 -c "import torch; print(f'✓ PyTorch {torch.__version__} installed')" \
+    && python3 -c "import transformers; print(f'✓ Transformers installed')" \
+    && python3 -c "import sentence_transformers; print(f'✓ Sentence-Transformers installed')" \
+    && echo "✓ All ML/AI dependencies validated successfully" \
   && echo "Cleaning up image" \
     && apt-get --yes purge ${BUILD_PACKAGES} \
     && apt-get --yes autoremove --purge \

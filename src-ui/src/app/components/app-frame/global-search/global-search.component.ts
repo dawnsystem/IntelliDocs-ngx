@@ -2,6 +2,7 @@ import { LocationStrategy, NgTemplateOutlet } from '@angular/common'
 import {
   Component,
   ElementRef,
+  OnDestroy,
   OnInit,
   QueryList,
   ViewChild,
@@ -17,7 +18,13 @@ import {
   NgbModalRef,
 } from '@ng-bootstrap/ng-bootstrap'
 import { NgxBootstrapIconsModule } from 'ngx-bootstrap-icons'
-import { Subject, debounceTime, distinctUntilChanged, filter } from 'rxjs'
+import {
+  Subject,
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  takeUntil,
+} from 'rxjs'
 import { DataType } from 'src/app/data/datatype'
 import {
   FILTER_FULLTEXT_QUERY,
@@ -69,7 +76,7 @@ import { WorkflowEditDialogComponent } from '../../common/edit-dialog/workflow-e
     NgTemplateOutlet,
   ],
 })
-export class GlobalSearchComponent implements OnInit {
+export class GlobalSearchComponent implements OnInit, OnDestroy {
   searchService = inject(SearchService)
   private router = inject(Router)
   private modalService = inject(NgbModal)
@@ -88,6 +95,7 @@ export class GlobalSearchComponent implements OnInit {
   private currentItemIndex: number = -1
   private domIndex: number = -1
   public loading: boolean = false
+  private unsubscribeNotifier = new Subject<void>()
 
   @ViewChild('searchInput') searchInput: ElementRef
   @ViewChild('resultsDropdown') resultsDropdown: NgbDropdown
@@ -109,7 +117,8 @@ export class GlobalSearchComponent implements OnInit {
       .pipe(
         debounceTime(400),
         filter((query) => !query?.length || query?.length > 2),
-        distinctUntilChanged()
+        distinctUntilChanged(),
+        takeUntil(this.unsubscribeNotifier)
       )
       .subscribe((text) => {
         this.query = text
@@ -120,9 +129,15 @@ export class GlobalSearchComponent implements OnInit {
   public ngOnInit() {
     this.hotkeyService
       .addShortcut({ keys: '/', description: $localize`Global search` })
+      .pipe(takeUntil(this.unsubscribeNotifier))
       .subscribe(() => {
         this.searchInput.nativeElement.focus()
       })
+  }
+
+  public ngOnDestroy(): void {
+    this.unsubscribeNotifier.next()
+    this.unsubscribeNotifier.complete()
   }
 
   private search(query: string) {
