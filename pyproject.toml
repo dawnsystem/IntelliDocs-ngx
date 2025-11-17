@@ -294,6 +294,8 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 75  # Fail if coverage drops below 75%
+skip_empty = true
 exclude_also = [
   "if settings.AUDIT_LOG_ENABLED:",
   "if AUDIT_LOG_ENABLED:",

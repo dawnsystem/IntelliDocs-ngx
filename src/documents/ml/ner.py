@@ -13,6 +13,7 @@ This enables automatic metadata extraction and better document understanding.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from transformers import pipeline
