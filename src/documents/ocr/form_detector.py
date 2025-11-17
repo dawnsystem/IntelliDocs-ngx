@@ -13,7 +13,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("paperless.ocr.form_detector")
 
 
 class FormFieldDetector:
