@@ -40,6 +40,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private hotKeyService = inject(HotKeyService)
   private componentRouterService = inject(ComponentRouterService)
 
+  private subscriptions = new Subscription()
   newDocumentSubscription: Subscription
   successSubscription: Subscription
   failedSubscription: Subscription
@@ -52,6 +53,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.websocketStatusService.disconnect()
+
+    // Unsubscribe from all subscriptions (hotkeys, etc.)
+    this.subscriptions.unsubscribe()
+
+    // Clean up legacy subscriptions
     if (this.successSubscription) {
       this.successSubscription.unsubscribe()
     }
@@ -137,22 +143,26 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       })
 
-    this.hotKeyService
-      .addShortcut({ keys: 'h', description: $localize`Dashboard` })
-      .subscribe(() => {
-        this.router.navigate(['/dashboard'])
-      })
+    this.subscriptions.add(
+      this.hotKeyService
+        .addShortcut({ keys: 'h', description: $localize`Dashboard` })
+        .subscribe(() => {
+          this.router.navigate(['/dashboard'])
+        })
+    )
     if (
       this.permissionsService.currentUserCan(
         PermissionAction.View,
         PermissionType.Document
       )
     ) {
-      this.hotKeyService
-        .addShortcut({ keys: 'd', description: $localize`Documents` })
-        .subscribe(() => {
-          this.router.navigate(['/documents'])
-        })
+      this.subscriptions.add(
+        this.hotKeyService
+          .addShortcut({ keys: 'd', description: $localize`Documents` })
+          .subscribe(() => {
+            this.router.navigate(['/documents'])
+          })
+      )
     }
     if (
       this.permissionsService.currentUserCan(
@@ -160,11 +170,13 @@ export class AppComponent implements OnInit, OnDestroy {
         PermissionType.UISettings
       )
     ) {
-      this.hotKeyService
-        .addShortcut({ keys: 's', description: $localize`Settings` })
-        .subscribe(() => {
-          this.router.navigate(['/settings'])
-        })
+      this.subscriptions.add(
+        this.hotKeyService
+          .addShortcut({ keys: 's', description: $localize`Settings` })
+          .subscribe(() => {
+            this.router.navigate(['/settings'])
+          })
+      )
     }
 
     const prevBtnTitle = $localize`Prev`
