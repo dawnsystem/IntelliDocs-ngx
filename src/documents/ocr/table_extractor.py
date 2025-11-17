@@ -13,10 +13,12 @@ from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image
 
+from documents.ocr.base_model_loader import BaseModelLoader
+
 logger = logging.getLogger("paperless.ocr.table_extractor")
 
 
-class TableExtractor:
+class TableExtractor(BaseModelLoader):
     """
     Extract tables from document images and PDFs.
     
@@ -41,43 +43,38 @@ class TableExtractor:
     ):
         """
         Initialize the table extractor.
-        
+
         Args:
             model_name: Hugging Face model name for table detection
             confidence_threshold: Minimum confidence score for detection (0-1)
             use_gpu: Whether to use GPU acceleration if available
+
+        Raises:
+            ValueError: If model_name is empty or confidence_threshold is invalid
+            TypeError: If parameters have incorrect types
         """
-        self.model_name = model_name
+        # Validate inputs
+        if not isinstance(model_name, str) or not model_name.strip():
+            raise ValueError("model_name must be a non-empty string")
+        if not isinstance(confidence_threshold, (int, float)):
+            raise TypeError("confidence_threshold must be a number")
+        if not 0.0 <= confidence_threshold <= 1.0:
+            raise ValueError("confidence_threshold must be between 0 and 1")
+        if not isinstance(use_gpu, bool):
+            raise TypeError("use_gpu must be a boolean")
+
+        super().__init__(model_name=model_name, use_gpu=use_gpu)
         self.confidence_threshold = confidence_threshold
-        self.use_gpu = use_gpu
-        self._model = None
-        self._processor = None
-        
+
     def _load_model(self):
-        """Lazy load the table detection model."""
-        if self._model is not None:
-            return
-            
-        try:
-            from transformers import AutoImageProcessor, AutoModelForObjectDetection
-            import torch
-            
-            logger.info(f"Loading table detection model: {self.model_name}")
-            
-            self._processor = AutoImageProcessor.from_pretrained(self.model_name)
-            self._model = AutoModelForObjectDetection.from_pretrained(self.model_name)
-            
-            # Move to GPU if available and requested
-            if self.use_gpu and torch.cuda.is_available():
-                self._model = self._model.cuda()
-                logger.info("Using GPU for table detection")
-            else:
-                logger.info("Using CPU for table detection")
-                
-        except ImportError as e:
-            logger.error(f"Failed to load table detection model: {e}")
-            logger.error("Please install required packages: pip install transformers torch pillow")
-            raise
+        """Lazy load the table detection model using base class."""
+        from transformers import AutoImageProcessor, AutoModelForObjectDetection
+
+        super()._load_model(
+            model_loader=lambda name: AutoModelForObjectDetection.from_pretrained(name),
+            processor_loader=lambda name: AutoImageProcessor.from_pretrained(name),
+            model_type_name="table detection",
+        )
     
     def detect_tables(self, image: Image.Image) -> List[Dict[str, Any]]:
         """

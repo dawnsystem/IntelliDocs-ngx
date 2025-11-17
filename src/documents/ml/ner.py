@@ -55,7 +55,7 @@ class DocumentNER:
     ):
         """
         Initialize NER extractor.
-        
+
         Args:
             model_name: HuggingFace NER model
                        Default: dslim/bert-base-NER (good general purpose)
@@ -63,7 +63,17 @@ class DocumentNER:
                        - dslim/bert-base-NER-uncased
                        - dbmdz/bert-large-cased-finetuned-conll03-english
             use_cache: Whether to use model cache (default: True)
+
+        Raises:
+            ValueError: If model_name is empty
+            TypeError: If parameters have incorrect types
         """
+        # Validate inputs
+        if not isinstance(model_name, str) or not model_name.strip():
+            raise ValueError("model_name must be a non-empty string")
+        if not isinstance(use_cache, bool):
+            raise TypeError("use_cache must be a boolean")
+
         logger.info(f"Initializing NER with model: {model_name} (caching: {use_cache})")
 
         self.model_name = model_name

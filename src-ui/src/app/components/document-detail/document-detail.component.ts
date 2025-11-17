@@ -210,8 +210,8 @@ export class DocumentDetailComponent
   private savedViewService = inject(SavedViewService)
 
   // Timeout IDs for cleanup
-  private navSelectTimeoutId: any
-  private previewLoadedTimeoutId: any
+  private navSelectTimeoutId: ReturnType<typeof setTimeout> | null
+  private previewLoadedTimeoutId: ReturnType<typeof setTimeout> | null
 
   @ViewChild('inputTitle')
   titleInput: TextComponent
@@ -219,7 +219,7 @@ export class DocumentDetailComponent
   expandOriginalMetadata = false
   expandArchivedMetadata = false
 
-  error: any
+  error: Error | { error?: unknown; message?: string } | null
 
   networkActive = false
 
@@ -352,14 +352,18 @@ export class DocumentDetailComponent
     }
   }
 
-  private mapDocToForm(doc: Document): any {
+  private mapDocToForm(doc: Document): Document & {
+    permissions_form: { owner: number; set_permissions: object }
+  } {
     return {
       ...doc,
       permissions_form: { owner: doc.owner, set_permissions: doc.permissions },
     }
   }
 
-  private mapFormToDoc(value: any): any {
+  private mapFormToDoc(
+    value: Document & { permissions_form?: { owner?: number; set_permissions?: object } }
+  ): Partial<Document> {
     const docValues = { ...value }
     docValues['owner'] = value['permissions_form']?.owner
     docValues['set_permissions'] = value['permissions_form']?.set_permissions
@@ -862,8 +866,8 @@ export class DocumentDetailComponent
       })
   }
 
-  private getChangedFields(): any {
-    const changes = {
+  private getChangedFields(): Partial<Document> & { id: number } {
+    const changes: Partial<Document> & { id: number } = {
       id: this.document.id,
     }
     Object.keys(this.documentForm.controls).forEach((key) => {

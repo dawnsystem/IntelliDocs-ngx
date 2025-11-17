@@ -182,9 +182,9 @@ type TriggerFilterAggregate = {
 }
 
 interface FilterHandler {
-  apply: (aggregate: TriggerFilterAggregate, values: any) => void
-  extract: (trigger: WorkflowTrigger) => any
-  hasValue: (value: any) => boolean
+  apply: (aggregate: TriggerFilterAggregate, values: unknown) => void
+  extract: (trigger: WorkflowTrigger) => unknown
+  hasValue: (value: unknown) => boolean
 }
 
 const CUSTOM_FIELD_QUERY_MODEL_KEY = Symbol('customFieldQueryModel')
@@ -629,12 +629,12 @@ export class WorkflowEditDialogComponent
     return this.objectForm.get('actions') as FormArray
   }
 
-  protected override getFormValues(): any {
+  protected override getFormValues(): Partial<Workflow> {
     const formValues = super.getFormValues()
 
     if (formValues?.triggers?.length) {
       formValues.triggers = formValues.triggers.map(
-        (trigger: any, index: number) => {
+        (trigger: WorkflowTrigger, index: number) => {
           const triggerFormGroup = this.triggerFields.at(index) as FormGroup
           const filters = this.getFiltersFormArray(triggerFormGroup)
 
@@ -701,7 +701,7 @@ export class WorkflowEditDialogComponent
 
   private createFilterFormGroup(
     type: TriggerFilterType,
-    initialValue?: any
+    initialValue?: unknown
   ): FormGroup {
     const group = new FormGroup({
       type: new FormControl(type),
@@ -923,7 +923,7 @@ export class WorkflowEditDialogComponent
 
   private ensureCustomFieldQueryModel(
     filterGroup: FormGroup,
-    initialValue?: any
+    initialValue?: unknown
   ): CustomFieldQueriesModel {
     const existingModel = this.getStoredCustomFieldQueryModel(filterGroup)
     if (existingModel) {
@@ -1016,7 +1016,7 @@ export class WorkflowEditDialogComponent
     return this.isMultiValueFilter(type) ? [] : null
   }
 
-  private normalizeFilterValue(type: TriggerFilterType, value?: any) {
+  private normalizeFilterValue(type: TriggerFilterType, value?: unknown): number | number[] | string | null {
     if (value === undefined || value === null) {
       return this.getDefaultFilterValue(type)
     }

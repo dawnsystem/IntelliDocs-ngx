@@ -54,7 +54,7 @@ class SemanticSearch:
     ):
         """
         Initialize semantic search.
-        
+
         Args:
             model_name: Sentence transformer model
                        Default: all-MiniLM-L6-v2 (80MB, fast, good quality)
@@ -64,7 +64,21 @@ class SemanticSearch:
                        - all-MiniLM-L12-v2 (120MB, balanced)
             cache_dir: Directory to cache model
             use_cache: Whether to use model cache (default: True)
+
+        Raises:
+            ValueError: If model_name is empty or cache_dir is invalid
+            TypeError: If parameters have incorrect types
         """
+        # Validate inputs
+        if not isinstance(model_name, str) or not model_name.strip():
+            raise ValueError("model_name must be a non-empty string")
+        if cache_dir is not None and not isinstance(cache_dir, str):
+            raise TypeError("cache_dir must be a string or None")
+        if cache_dir is not None and not cache_dir.strip():
+            raise ValueError("cache_dir must be a non-empty string or None")
+        if not isinstance(use_cache, bool):
+            raise TypeError("use_cache must be a boolean")
+
         logger.info(
             f"Initializing SemanticSearch with model: {model_name} "
             f"(caching: {use_cache})"

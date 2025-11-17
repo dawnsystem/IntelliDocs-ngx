@@ -154,6 +154,15 @@ jobs:
       - name: Configure ImageMagick
         run: |
           sudo cp docker/rootfs/etc/ImageMagick-6/paperless-policy.xml /etc/ImageMagick-6/policy.xml
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch
+          key: ${{ runner.os }}-ml-models-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-ml-models-
       - name: Install Python dependencies
         run: |
           uv sync \

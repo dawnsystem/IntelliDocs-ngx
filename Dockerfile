@@ -113,7 +113,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PNGX_CONTAINERIZED=1 \
     # https://docs.astral.sh/uv/reference/settings/#link-mode
     UV_LINK_MODE=copy \
-    UV_CACHE_DIR=/cache/uv/
+    UV_CACHE_DIR=/cache/uv/ \
+    # HuggingFace and ML model cache directories
+    TRANSFORMERS_CACHE=/usr/src/paperless/.cache/huggingface \
+    HF_HOME=/usr/src/paperless/.cache/huggingface \
+    TORCH_HOME=/usr/src/paperless/.cache/torch
 
 #
 # Begin installation and configuration
@@ -262,6 +266,9 @@ RUN set -eux \
     && mkdir --parents --verbose /usr/src/paperless/export \
   && echo "Creating gnupg directory" \
     && mkdir -m700 --verbose /usr/src/paperless/.gnupg \
+  && echo "Creating ML model cache directories" \
+    && mkdir --parents --verbose /usr/src/paperless/.cache/huggingface \
+    && mkdir --parents --verbose /usr/src/paperless/.cache/torch \
   && echo "Adjusting all permissions" \
     && chown --from root:root --changes --recursive paperless:paperless /usr/src/paperless \
   && echo "Collecting static files" \
