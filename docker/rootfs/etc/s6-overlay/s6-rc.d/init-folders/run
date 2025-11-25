@@ -8,6 +8,7 @@ declare -r data_dir="${PAPERLESS_DATA_DIR:-/usr/src/paperless/data}"
 declare -r media_root_dir="${PAPERLESS_MEDIA_ROOT:-/usr/src/paperless/media}"
 declare -r consume_dir="${PAPERLESS_CONSUMPTION_DIR:-/usr/src/paperless/consume}"
 declare -r tmp_dir="${PAPERLESS_SCRATCH_DIR:=/tmp/paperless}"
+declare -r ml_cache_dir="${PAPERLESS_ML_MODEL_CACHE:-/usr/src/paperless/.cache/huggingface}"
 
 declare -r main_dirs=(
 	"${export_dir}"
@@ -15,6 +16,7 @@ declare -r main_dirs=(
 	"${media_root_dir}"
 	"${consume_dir}"
 	"${tmp_dir}"
+	"${ml_cache_dir}"
 )
 
 declare -r extra_dirs=(
