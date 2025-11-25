@@ -210,6 +210,8 @@ ARG BUILD_PACKAGES="\
   build-essential \
   # https://github.com/PyMySQL/mysqlclient#linux
   default-libmysqlclient-dev \
+  # https://www.psycopg.org/psycopg3/docs/basic/install.html#local-installation
+  libpq-dev \
   pkg-config"
 
 # hadolint ignore=DL3042
